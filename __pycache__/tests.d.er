@@ -1,0 +1,11 @@
+##[pylyzer] failed /home/abraham/code/boot/aiagent/tests.py 1750105459 307
+.___v_desugar_1 = pyimport "get_files_info"
+.get_files_info = pyimport "get_files_info"
+.get_files_info: (working_directory: Obj, directory: Obj := Obj) -> Str
+
+
+
+
+
+
+
