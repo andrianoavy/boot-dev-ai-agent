@@ -113,30 +113,63 @@ All paths you provide should be relative to the working directory. You do not ne
 response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
-    config=types.GenerateContentConfig(system_instruction=system_prompt, tools=[available_functions])
+    config=types.GenerateContentConfig(
+        system_instruction=system_prompt, tools=[available_functions])
 )
 
-# print(f"Answer: {response.text}")
 
-if len(response.function_calls) == 0:
-    print(f"No function calls: {fn}" )
+iter = 0
+answer = ""
 
-for fn in response.function_calls: 
-    # print(f"Calling function: {fn.name}({fn.args})")
-    fn_call_result = call_function(fn,verbose)
-    # .parts[0].function_response.response
-    is_valid_response = hasattr(fn_call_result, "parts") and len(fn_call_result.parts) > 0 and hasattr(fn_call_result.parts[0], "function_response") and hasattr(fn_call_result.parts[0].function_response, "response")
+while iter < 20:
 
-    if not is_valid_response:
-        raise Error("Invalid function response")
-    else:
+    if response is None:
+
+        print(f"Final answer: {answer}\r\n")
+        break
+
+    if verbose:
+        print(f"Intermediate answer: {answer}\r\n")
+    answer = ""
+
+    for candidate in response.candidates:
+        for part in candidate.content.parts:
+            if part.text is not None:
+                answer += part.text
+        messages.append(candidate.content)
+
+    if response.function_calls is not None:
+        for fn in response.function_calls:
+            fn_call_result = call_function(fn, verbose)
+
+            is_valid_response = hasattr(fn_call_result, "parts") \
+                and len(fn_call_result.parts) > 0 \
+                and hasattr(fn_call_result.parts[0], "function_response") \
+                and hasattr(fn_call_result.parts[0].function_response, "response")
+
+            if not is_valid_response:
+                raise ValueError("Invalid function response")
+            else:
+                if verbose:
+                    print(
+                        f"-> {fn_call_result.parts[0].function_response.response}")
+                messages.append(fn_call_result)
+
+        prompt_tokens = response.usage_metadata.prompt_token_count
+        response_tokens = response.usage_metadata.candidates_token_count
+
         if verbose:
-            print(f"-> {fn_call_result.parts[0].function_response.response}")
+            print(f"User prompt: {user_prompt}")
+            print(f"Prompt tokens: {prompt_tokens}")
+            print(f"Response tokens: {response_tokens}")
 
-prompt_tokens = response.usage_metadata.prompt_token_count
-response_tokens = response.usage_metadata.candidates_token_count
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=messages,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt, tools=[available_functions])
+        )
+    else:
+        response = None
 
-if verbose:
-    print(f"User prompt: {user_prompt}")
-    print(f"Prompt tokens: {prompt_tokens}")
-    print(f"Response tokens: {response_tokens}")
+    iter += 1
