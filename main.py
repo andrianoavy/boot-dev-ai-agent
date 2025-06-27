@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from functions.call_function import call_function
 
 load_dotenv()
 
@@ -46,7 +47,7 @@ schema_get_file_content = types.FunctionDeclaration(
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
-            "file": types.Schema(
+            "file_path": types.Schema(
                 type=types.Type.STRING,
                 description="The file to read the content of, relative to the working directory. If not provided, return an error.",
             ),
@@ -60,7 +61,7 @@ schema_run_python_file = types.FunctionDeclaration(
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
-            "file": types.Schema(
+            "file_path": types.Schema(
                 type=types.Type.STRING,
                 description="The file to execute , relative to the working directory. If not provided, return an error.",
             ),
@@ -74,7 +75,7 @@ schema_write_file = types.FunctionDeclaration(
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
-            "file": types.Schema(
+            "file_path": types.Schema(
                 type=types.Type.STRING,
                 description="The file to write in, relative to the working directory. If not provided. Return an error.",
             ),
@@ -108,16 +109,29 @@ When a user asks a question or makes a request, make a function call plan. You c
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 
 """
+
 response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
     config=types.GenerateContentConfig(system_instruction=system_prompt, tools=[available_functions])
 )
 
-print(f"Answer: {response.text}")
+# print(f"Answer: {response.text}")
+
+if len(response.function_calls) == 0:
+    print(f"No function calls: {fn}" )
 
 for fn in response.function_calls: 
-    print(f"Calling function: {fn.name}({fn.args})")
+    # print(f"Calling function: {fn.name}({fn.args})")
+    fn_call_result = call_function(fn,verbose)
+    # .parts[0].function_response.response
+    is_valid_response = hasattr(fn_call_result, "parts") and len(fn_call_result.parts) > 0 and hasattr(fn_call_result.parts[0], "function_response") and hasattr(fn_call_result.parts[0].function_response, "response")
+
+    if not is_valid_response:
+        raise Error("Invalid function response")
+    else:
+        if verbose:
+            print(f"-> {fn_call_result.parts[0].function_response.response}")
 
 prompt_tokens = response.usage_metadata.prompt_token_count
 response_tokens = response.usage_metadata.candidates_token_count
